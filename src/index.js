@@ -3,6 +3,7 @@ import express from "express";
 import moodsRouter from './routes/moods.js';
 import symptomsRouter from './routes/symptoms.js';
 import moodEntriesRouter from './routes/moodEntries.js';
+import symptomEntriesRouter from './routes/symptomEntries.js';
 
 const app = express(); // create app object
 
@@ -22,6 +23,22 @@ app.get("/health", (request, response) => {
 app.use("/moods", moodsRouter);
 app.use("/symptoms", symptomsRouter);
 app.use("/mood-entries", moodEntriesRouter);
+app.use("/symptom-entries", symptomEntriesRouter);
+app.use((request, response) => {
+    response.status(404).json({
+        error: `cannot ${request.method} ${request.originalUrl}`
+    });
+});
+
+// -- Error handler
+app.use((err, request, response, next) => {
+    console.error(err);
+    const status = err.status ?? 500;
+
+    response.status(status).json({
+        error: status < 500 ? err.message : "Internal server error"
+    })
+});
 
 // Start listening
 app.listen(PORT, () => {
