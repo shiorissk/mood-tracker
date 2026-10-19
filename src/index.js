@@ -1,4 +1,5 @@
-import "dotenv/config"
+import "dotenv/config";
+import "./db/db.js";
 import express from "express";
 import moodsRouter from './routes/moods.js';
 import symptomsRouter from './routes/symptoms.js';

@@ -1,11 +1,11 @@
 import express from "express";
-import { moods } from "../data.js";
-let nextMoodId = 1;
+import db from "../db/db.js";
 
 const router = express.Router();
 
 // -- GET /moods
 router.get("/", (request, response) => {
+    const moods = db.prepare("SELECT * FROM Mood ORDER BY id").all();
     response.json({
         moods: moods
     });
@@ -14,30 +14,26 @@ router.get("/", (request, response) => {
 // -- POST /moods -------------------------------------------
 router.post("/", (request, response) => {
     const body = request.body ?? {};
-
+    
     // Read name from the body. If it's missing, return 400. 
     if (typeof body.name !== "string" || body.name.trim() === "") {
         return response.status(400).json({
-            error: 'Name is required and must be a string".'
+            error: 'Name is required and must be a string.'
         })
     }
-
+    
     const name = body.name.trim().toLowerCase();
+    const row = db.prepare("SELECT * FROM Mood WHERE name = ?").get(name); // check if the row exists
 
     // If it's already in the list, return 409. 
-    if (moods.some(mood => mood.name === name)) {
+    if (row) {
         return response.status(409).json({
             error: 'mood already exists in the list'
         });
     }
-    
-    // Otherwise push new mood and return 201 with the new mood
-    const newMood = {
-        name: name,
-        id: nextMoodId++
-    };
 
-    moods.push(newMood);
+    db.prepare("INSERT INTO Mood (name) VALUES (?)").run(name);
+    const newMood = db.prepare("SELECT * FROM Mood WHERE name = ?").get(name);
 
     response.status(201).json(newMood);
 });
