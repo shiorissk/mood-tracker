@@ -1,5 +1,6 @@
 import "dotenv/config";
 import "./db/db.js";
+import path from "node:path";
 import express from "express";
 import moodsRouter from './routes/moods.js';
 import symptomsRouter from './routes/symptoms.js';
@@ -12,6 +13,9 @@ const PORT = process.env.PORT || 3000;
 
 // -- Middleware to accept JSON bodies
 app.use(express.json());
+
+// -- Serve frontend files from /public
+app.use(express.static(path.join(import.meta.dirname, "..", "public")));
 
 // -- GET /health -------------------------------------------
 app.get("/health", (request, response) => {
