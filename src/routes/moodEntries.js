@@ -1,11 +1,11 @@
 import express from "express";
-import { moodEntries, moods } from "../data.js";
-let nextMoodEntryId = 1;
+import db from "../db/db.js";
 
 const router = express.Router();
 
 // -- GET /mood-entries
 router.get('/', (request, response) => {
+    const moodEntries = db.prepare("SELECT * FROM MoodEntry ORDER BY id").all();
     response.json({
         moodEntries: moodEntries
     });
@@ -14,7 +14,7 @@ router.get('/', (request, response) => {
 // -- GET /mood-entries/:id
 router.get("/:id", (request, response) => {
     const entryId = Number(request.params.id);
-    const moodEntry = moodEntries.find(entry => entry.id === entryId);
+    const moodEntry = db.prepare("SELECT * FROM MoodEntry WHERE id = ?").get(entryId);
 
     // return 404, if mood with the id is not found
     if (!moodEntry) {
@@ -30,15 +30,15 @@ router.get("/:id", (request, response) => {
 router.post("/", (request, response) => {
     const body = request.body ?? {};
 
-    // Return if moodId does not exist in moods array
-    if (!moods.some(mood => mood.id === body.moodId)) {
+    // Return if moodId does not exist in Mood table
+    if (!Number.isInteger(body.moodId) || !db.prepare("SELECT * FROM Mood WHERE id = ?").get(body.moodId)) {
         return response.status(400).json({
             error: 'moodId must be the id of an existing mood'
         })
     }
 
     // feelingScore should be Int, if it exists
-    if (body.feelingScore != null && (!Number.isInteger(body.feelingScore) || body.feelingScore > 5 || body.feelingScore < 1)) {
+    if (body.feelingScore !== null && (!Number.isInteger(body.feelingScore) || body.feelingScore > 5 || body.feelingScore < 1)) {
          return response.status(400).json({
             error: 'feelingScore must be an integer between 1-5'
         })
@@ -51,17 +51,16 @@ router.post("/", (request, response) => {
         })
     }
 
-    // Otherwise push new entry to moodEntry
-    const newMoodEntry = {
-        id: nextMoodEntryId++,
-        moodId: body.moodId,
-        createdAt: new Date().toISOString(),
-        feelingScore: body.feelingScore ?? null,
-        trigger: body.trigger?.trim() || null
-
-    };
-
-    moodEntries.push(newMoodEntry);
+    // Otherwise insert new entry to moodEntry
+    const newMoodEntry = db.prepare(`
+        INSERT INTO MoodEntry (moodId, feelingScore, trigger)
+        VALUES (?, ?, ?)
+        RETURNING *
+    `).get(
+        body.moodId,
+        body.feelingScore ?? null,
+        body.trigger?.trim() || null
+    );
 
     response.status(201).json(newMoodEntry);
 });
@@ -69,22 +68,22 @@ router.post("/", (request, response) => {
 // -- DELETE /mood-entries/:id
 router.delete("/:id", (request, response) => {
     const entryId = Number(request.params.id);
-    const entryIndex = moodEntries.findIndex(entry => entry.id === entryId);
+    const entry = db.prepare("SELECT * FROM MoodEntry WHERE id = ?").get(entryId);
 
-    if (entryIndex === -1) {
+    if (!entry) {
         return response.status(404).json({
             error: 'Entry not found'
         })
     }
 
-    moodEntries.splice(entryIndex, 1);
+    db.prepare("DELETE FROM MoodEntry WHERE id = ?").run(entryId);
     response.status(204).end();
 });
 
 // -- PATCH /mood-entries/:id
 router.patch("/:id", (request, response) => {
     const entryId = Number(request.params.id);
-    const entry = moodEntries.find(entry => entry.id === entryId);
+    const entry = db.prepare("SELECT * FROM MoodEntry WHERE id = ?").get(entryId);
     const body = request.body ?? {};
 
     if (!entry) {
@@ -94,7 +93,7 @@ router.patch("/:id", (request, response) => {
     }
 
     // Return if moodId does not exist in moods array
-    if (body.moodId !== undefined && !moods.some(mood => mood.id === body.moodId)) {
+    if (body.moodId !== undefined && (!Number.isInteger(body.moodId) || !db.prepare("SELECT * FROM Mood WHERE id = ?").get(body.moodId))) {
         return response.status(400).json({
             error: 'moodId must be the id of an existing mood'
         })
@@ -114,12 +113,14 @@ router.patch("/:id", (request, response) => {
         })
     }
 
-    if (body.moodId !== undefined) entry.moodId = body.moodId;
-    if (body.feelingScore !== undefined) entry.feelingScore = body.feelingScore;
-    if (body.trigger !== undefined)  entry.trigger = body.trigger?.trim() || null;
+    const updatedEntry = db.prepare("UPDATE MoodEntry SET moodId = ?, feelingScore = ?, trigger = ? WHERE id = ? RETURNING *").get(
+        body.moodId !== undefined ? body.moodId : entry.moodId,
+        body.feelingScore !== undefined ? body.feelingScore : entry.feelingScore,
+        body.trigger !== undefined ? body.trigger?.trim() || null : entry.trigger,
+        entryId
+    );
 
-
-    return response.json(entry)
+    return response.json(updatedEntry)
 });
 
 export default router;

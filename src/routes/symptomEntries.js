@@ -1,11 +1,11 @@
 import express from "express";
-import { symptomEntries, symptoms } from "../data.js";
-let nextSymptomEntryId = 1;
+import db from "../db/db.js";
 
 const router = express.Router();
 
 // -- GET /symptom-entries
 router.get('/', (request, response) => {
+    const symptomEntries = db.prepare("SELECT * FROM SymptomEntry ORDER BY ID").all();
     response.json({
         symptomEntries: symptomEntries
     });
@@ -14,7 +14,7 @@ router.get('/', (request, response) => {
 // -- GET /symptom-entries/:id
 router.get("/:id", (request, response) => {
     const entryId = Number(request.params.id);
-    const symptomEntry = symptomEntries.find(entry => entry.id === entryId);
+    const symptomEntry = db.prepare("SELECT * FROM SymptomEntry WHERE id = ?").get(entryId);
 
     // return 404, if symptom with the id is not found
     if (!symptomEntry) {
@@ -31,7 +31,7 @@ router.post("/", (request, response) => {
     const body = request.body ?? {};
 
     // Return if symptomId does not exist in symptoms array
-    if (!symptoms.some(symptom => symptom.id === body.symptomId)) {
+    if (!Number.isInteger(body.symptomId) || !db.prepare("SELECT * FROM Symptom WHERE id = ?").get(body.symptomId)) {
         return response.status(400).json({
             error: 'symptomId must be the id of an existing symptom'
         })
@@ -51,17 +51,16 @@ router.post("/", (request, response) => {
         })
     }
 
-    // Otherwise push new entry to symptomEntry
-    const newSymptomEntry = {
-        id: nextSymptomEntryId++,
-        symptomId: body.symptomId,
-        createdAt: new Date().toISOString(),
-        intensity: body.intensity ?? null,
-        trigger: body.trigger?.trim() || null
-
-    };
-
-    symptomEntries.push(newSymptomEntry);
+     // Otherwise insert new entry to symptomEntry
+    const newSymptomEntry = db.prepare(`
+        INSERT INTO SymptomEntry (symptomId, intensity, trigger)
+        VALUES (?, ?, ?)
+        RETURNING *
+    `).get(
+        body.symptomId,
+        body.intensity ?? null,
+        body.trigger?.trim() || null
+    );
 
     response.status(201).json(newSymptomEntry);
 });
@@ -69,22 +68,22 @@ router.post("/", (request, response) => {
 // -- DELETE /symptom-entries/:id
 router.delete("/:id", (request, response) => {
     const entryId = Number(request.params.id);
-    const entryIndex = symptomEntries.findIndex(entry => entry.id === entryId);
+    const entry = db.prepare("SELECT * FROM SymptomEntry WHERE id = ?").get(entryId);
 
-    if (entryIndex === -1) {
+    if (!entry) {
         return response.status(404).json({
             error: 'Entry not found'
         })
     }
 
-    symptomEntries.splice(entryIndex, 1);
+    db.prepare("DELETE FROM SymptomEntry WHERE id = ?").run(entryId);
     response.status(204).end();
 });
 
 // -- PATCH /symptom-entries/:id
 router.patch("/:id", (request, response) => {
     const entryId = Number(request.params.id);
-    const entry = symptomEntries.find(entry => entry.id === entryId);
+    const entry = db.prepare("SELECT * FROM SymptomEntry WHERE id = ?").get(entryId);
     const body = request.body ?? {};
 
     if (!entry) {
@@ -94,7 +93,7 @@ router.patch("/:id", (request, response) => {
     }
 
     // Return if symptomId does not exist in symptoms array
-    if (body.symptomId !== undefined && !symptoms.some(symptom => symptom.id === body.symptomId)) {
+    if (body.symptomId !== undefined && (!Number.isInteger(body.symptomId) || !db.prepare("SELECT * FROM Symptom WHERE id = ?").get(body.symptomId))) {
         return response.status(400).json({
             error: 'symptomId must be the id of an existing symptom'
         })
@@ -114,12 +113,15 @@ router.patch("/:id", (request, response) => {
         })
     }
 
-    if (body.symptomId !== undefined) entry.symptomId = body.symptomId;
-    if (body.intensity !== undefined) entry.intensity = body.intensity;
-    if (body.trigger !== undefined)  entry.trigger = body.trigger?.trim() || null;
+    const updatedEntry = db.prepare("UPDATE SymptomEntry SET symptomId = ?, intensity = ?, trigger = ? WHERE id = ? RETURNING *").get(
+        body.symptomId !== undefined ? body.symptomId : entry.symptomId,
+        body.intensity !== undefined ? body.intensity : entry.intensity,
+        body.trigger !== undefined ? body.trigger?.trim() || null : entry.trigger,
+        entryId
+    );
 
 
-    return response.json(entry)
+    return response.json(updatedEntry)
 });
 
 export default router;
