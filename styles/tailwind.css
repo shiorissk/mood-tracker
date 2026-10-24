@@ -1,0 +1,5 @@
+/* Tailwind entry file — compiled to public/styles.css (see "build:css" / "watch:css" in package.json) */
+@import "tailwindcss";
+
+/* Scan the frontend for class names, including the ones built in app.js */
+@source "../public";

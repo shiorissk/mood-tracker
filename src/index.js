@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000;
 // -- Middleware to accept JSON bodies
 app.use(express.json());
 
-// -- Serve frontend files from /public
+// -- Serve frontend files
 app.use(express.static(path.join(import.meta.dirname, "..", "public")));
 
 // -- GET /health -------------------------------------------
