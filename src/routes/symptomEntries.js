@@ -3,9 +3,19 @@ import db from "../db/db.js";
 
 const router = express.Router();
 
+const SELECT_ENTRY = `
+    SELECT e.id, e.symptomId, s.name as symptomName, e.createdAt, e.intensity, trigger
+    FROM SymptomEntry AS e
+    LEFT JOIN Symptom AS s
+    ON e.symptomId = s.id
+`
+
 // -- GET /symptom-entries
 router.get('/', (request, response) => {
-    const symptomEntries = db.prepare("SELECT * FROM SymptomEntry ORDER BY ID").all();
+    const symptomEntries = db.prepare(`
+        ${SELECT_ENTRY}
+        ORDER BY e.id
+    `).all();
     response.json({
         symptomEntries: symptomEntries
     });
@@ -14,7 +24,7 @@ router.get('/', (request, response) => {
 // -- GET /symptom-entries/:id
 router.get("/:id", (request, response) => {
     const entryId = Number(request.params.id);
-    const symptomEntry = db.prepare("SELECT * FROM SymptomEntry WHERE id = ?").get(entryId);
+    const symptomEntry = db.prepare(`${SELECT_ENTRY} WHERE e.id = ?`).get(entryId);
 
     // return 404, if symptom with the id is not found
     if (!symptomEntry) {
@@ -62,7 +72,12 @@ router.post("/", (request, response) => {
         body.trigger?.trim() || null
     );
 
-    response.status(201).json(newSymptomEntry);
+    const newEntryWithSymptomName = db.prepare(`
+        ${SELECT_ENTRY}
+        WHERE e.id = ?
+    `).get(newSymptomEntry.id);
+
+    response.status(201).json(newEntryWithSymptomName);
 });
 
 // -- DELETE /symptom-entries/:id
@@ -120,8 +135,13 @@ router.patch("/:id", (request, response) => {
         entryId
     );
 
+    const updatedEntryWithSymptomName = db.prepare(`
+        ${SELECT_ENTRY}
+        WHERE e.id = ?
+    `).get(updatedEntry.id);
 
-    return response.json(updatedEntry)
+
+    return response.json(updatedEntryWithSymptomName)
 });
 
 export default router;

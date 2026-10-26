@@ -3,9 +3,18 @@ import db from "../db/db.js";
 
 const router = express.Router();
 
+const SELECT_ENTRY = `
+    SELECT e.id, e.moodId, m.name AS moodName, e.createdAt, e.feelingScore, e.trigger
+    FROM MoodEntry AS e
+    LEFT JOIN Mood AS m
+    ON e.moodId = m.id`;
+
 // -- GET /mood-entries
 router.get('/', (request, response) => {
-    const moodEntries = db.prepare("SELECT * FROM MoodEntry ORDER BY id").all();
+    const moodEntries = db.prepare(`
+        ${SELECT_ENTRY}
+        ORDER BY e.id
+    `).all();
     response.json({
         moodEntries: moodEntries
     });
@@ -14,7 +23,10 @@ router.get('/', (request, response) => {
 // -- GET /mood-entries/:id
 router.get("/:id", (request, response) => {
     const entryId = Number(request.params.id);
-    const moodEntry = db.prepare("SELECT * FROM MoodEntry WHERE id = ?").get(entryId);
+    const moodEntry = db.prepare(`
+         ${SELECT_ENTRY}
+        WHERE e.id = ?
+    `).get(entryId);
 
     // return 404, if mood with the id is not found
     if (!moodEntry) {
@@ -38,7 +50,7 @@ router.post("/", (request, response) => {
     }
 
     // feelingScore should be Int, if it exists
-    if (body.feelingScore !== null && (!Number.isInteger(body.feelingScore) || body.feelingScore > 5 || body.feelingScore < 1)) {
+    if (body.feelingScore != null && (!Number.isInteger(body.feelingScore) || body.feelingScore > 5 || body.feelingScore < 1)) {
          return response.status(400).json({
             error: 'feelingScore must be an integer between 1-5'
         })
@@ -62,7 +74,12 @@ router.post("/", (request, response) => {
         body.trigger?.trim() || null
     );
 
-    response.status(201).json(newMoodEntry);
+    const newMoodEntryWithName = db.prepare(`
+        ${SELECT_ENTRY}
+        WHERE e.id = ?
+    `).get(newMoodEntry.id);
+
+    response.status(201).json(newMoodEntryWithName);
 });
 
 // -- DELETE /mood-entries/:id
@@ -120,7 +137,12 @@ router.patch("/:id", (request, response) => {
         entryId
     );
 
-    return response.json(updatedEntry)
+    const updatedEntryWithName = db.prepare(`
+        ${SELECT_ENTRY}
+        WHERE e.id = ?
+    `).get(updatedEntry.id);
+
+    return response.json(updatedEntryWithName);
 });
 
 export default router;

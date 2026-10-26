@@ -1,111 +1,314 @@
 # 🌙 Mood & Symptom Tracker
 
-> Planning notes only — **no code here yet**. This app is being built by
-> Shiori herself, by hand, as part of the 2026 OKR below. Nothing in this
-> file is meant to be copy-pasted; it's a reference for decisions already
-> made, so a future session (or future Shiori) can pick this up without
-> re-deciding everything from scratch.
+A small web app for logging how you feel, several times a day. Mood is the centerpiece: instead of a single 1–5 scale, you build up your own vocabulary of feelings (calm, grateful, anxious, …) and log check-ins against it. Physical symptoms (headache, fatigue, …) are tracked in a separate log on their own timeline.
 
-## Why this app exists
+It consists of a JSON REST API (Express + SQLite) and a plain HTML/JavaScript frontend that uses that API.
 
-Formal 2026 OKR: **"Build an app with own API, DB and authentication"**
-(goal cycle 2026 Goals, 07 May 2026 – 31 Dec 2026). Key results:
+## Features
 
-- Develop an API for the app with clear documentation and endpoints
-- Set up a secure and scalable database for the app
-- Implement user authentication functionality with proper user roles and permissions
-- (Optional) Add interface (front-end)
+- **Mood check-ins**: pick a mood, optionally rate how you feel (1–5) and note what triggered it
+- **Symptom log**: pick a symptom, optionally rate its intensity (1–5) and add a trigger
+- **Your own vocabulary**: add new moods and symptoms at any time; duplicates are rejected regardless of case or spacing
+- **Recent entries** for both logs, newest first, with delete
+- **Validation in two layers**: the API validates every request, and the database enforces the same rules with constraints
 
-This app is the real deliverable for that goal — replacing the (AI-built)
-Timesheet app as the running project, so every part of it is understood
-first-hand. `../backend-study/` remains the curriculum (phased roadmap +
-exercises); this is where those skills get applied for real.
+## Tech stack
 
-## The idea
+| Part | Technology |
+|---|---|
+| Server | [Node.js](https://nodejs.org/) + [Express 5](https://expressjs.com/) |
+| Database | SQLite via Node's built-in [`node:sqlite`](https://nodejs.org/api/sqlite.html), plain SQL with parameterized queries (no ORM) |
+| Frontend | HTML + JavaScript modules, no framework, served by Express |
+| Styling | [Tailwind CSS v4](https://tailwindcss.com/) (CLI build) |
 
-A mood tracker where **mood is the centerpiece** — not a single 1–5 scale,
-but a growing personal vocabulary of feelings (motivated, calm, grateful, anxious, etc.). Physical symptoms (headache, fatigue, poor
-sleep...) are tracked as a **separate**, independent log — deliberately
-not mixed into mood entries.
+## Getting started
 
-## v1 decisions (locked in 25 Sep 2026)
+**Requirements:** Node.js 22.13 or newer (developed on Node 24), because `node:sqlite` is built into Node from that version on.
 
-- **Check-in frequency:** multiple times a day, timestamped — not one
-  daily summary.
-- **Moods per check-in:** one mood per check-in (kept simple on purpose;
-  could become many-to-many later if that changes).
-- **Symptoms:** their own catalog + their own log, on their own timeline,
-  separate from mood check-ins.
-- **Users:** single-user for now (just Shiori). No sharing / "viewer"
-  role planned for v1 — auth (Phase 3) is about protecting her own data,
-  not multi-user roles for other people. (A read-only share-with-someone
-  role was discussed as a nice-to-have but explicitly deferred.)
-- **Where it lives:** `~/ai/mood-tracker/` — its own project, separate
-  from `backend-study/`.
+```sh
+git clone https://github.com/shimpukka/mood-tracker.git
+cd mood-tracker
+npm install
+```
 
-## Rough shape, for reference (not final — design it herself)
+**Run in development** (two terminals):
 
-Two catalog + log pairs, similar in spirit to backend-study's
-`Category` → `HourEntry` relationship:
+```sh
+npm run dev         # API + frontend on http://localhost:3000, restarts on file changes
+npm run watch:css   # rebuilds the Tailwind CSS on every save
+```
 
-- `Mood` (catalog: id, label) → `MoodCheckIn` (timestamp, note, which mood)
-- `Symptom` (catalog: id, label) → `SymptomLog` (timestamp, severity, note, which symptom)
+**Run normally:**
 
-## Status as of 25 Sep 2026
+```sh
+npm start           # builds the CSS first, then starts the server
+```
 
-Planning only. A scaffold (package.json, Prisma schema, db client) was
-generated and then deliberately deleted — Shiori wants to build this one
-herself from an empty folder, with mentoring/review rather than
-AI-written code. Next actual step is up to her.
+Open http://localhost:3000. The database file and its tables are created automatically on first start.
 
-## Data model (v1, designed 28 Sep 2026)
+### Scripts
 
-Two lookup tables (the list of options) and two entry tables (what actually gets logged).
-Each entry points to one option by its `id`.
+| Script | What it does |
+|---|---|
+| `npm run dev` | Start the server with `node --watch` |
+| `npm start` | Build the CSS (`prestart`), then start the server |
+| `npm run build:css` | Build a minified `public/styles.css` |
+| `npm run watch:css` | Rebuild `public/styles.css` whenever classes change |
 
-### Mood — the list of moods to pick from
+### Configuration
 
-| Column | Type     | Required | Notes                                  |
-|--------|----------|----------|----------------------------------------|
-| id     | Int      | yes      | Primary key, auto-increment            |
-| name   | String   | yes      | Unique, e.g. "calm", "grateful", "self-hate" |
+Optional settings go in a `.env` file in the project root:
 
-### MoodEntry — one mood check-in (can be many per day)
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `3000` | Port the server listens on |
+| `DB_PATH` | `mood.db` | Path of the SQLite database file (relative to where the server is started) |
 
-| Column       | Type     | Required | Notes                                      |
-|--------------|----------|----------|--------------------------------------------|
-| id           | Int      | yes      | Primary key, auto-increment                |
-| moodId       | Int      | yes      | Links to `Mood.id`                         |
-| createdAt    | DateTime | yes      | Defaults to now                            |
-| feelingScore | Int      | no       | 1–5, **5 = feels good**                    |
-| trigger      | String   | no       | What caused the mood                       |
+`.env` and `*.db` files are git-ignored, so your data never ends up in the repository. To back up your data, copy the database file.
 
-### Symptom — the list of physical symptoms
+## Project structure
 
-| Column | Type     | Required | Notes                                  |
-|--------|----------|----------|----------------------------------------|
-| id     | Int      | yes      | Primary key, auto-increment            |
-| name   | String   | yes      | Unique, e.g. "headache", "fatigue"     |
+```
+src/
+  index.js              Express app: middleware, static files, routers, 404 + error handler
+  db/
+    db.js               Opens the database, enables foreign keys, runs schema.sql
+    schema.sql          Table definitions (CREATE TABLE IF NOT EXISTS)
+  routes/
+    moods.js            /moods
+    symptoms.js         /symptoms
+    moodEntries.js      /mood-entries
+    symptomEntries.js   /symptom-entries
+public/
+  index.html            The page (tabs + one template for both trackers)
+  app.js                UI logic
+  api.js                request() helper around fetch
+  styles.css            Generated by Tailwind (git-ignored)
+styles/
+  tailwind.css          Tailwind source file
+```
 
-### SymptomEntry — one logged symptom (separate timeline from moods)
+## API reference
 
-| Column    | Type     | Required | Notes                                      |
-|-----------|----------|----------|--------------------------------------------|
-| id        | Int      | yes      | Primary key, auto-increment                |
-| symptomId | Int      | yes      | Links to `Symptom.id`                      |
-| createdAt | DateTime | yes      | Defaults to now                            |
-| intensity | Int      | no       | 1–5, **5 = most severe**                   |
-| trigger   | String   | no       | What caused the symptom                    |
+Base URL: `http://localhost:3000`
 
-### Design decisions
+### Conventions
 
-- **Lookup tables instead of plain text or enums**, so moods and symptoms can be added
-  at runtime, typos can't create duplicates, and renaming happens in one place.
-- **Scales point in opposite directions:** `feelingScore` 5 = good, `intensity` 5 = bad.
-  Keep this in mind when building charts.
-- **Ranges (1–5) are checked by the API, not the database.** Prisma + SQLite will accept
-  any integer, so validation happens in the route before saving.
-- **`trigger` instead of a free-text note** for now, since it's narrower and more useful
-  for later queries ("what triggers show up most?"). A general `note` column can be
-  added later with a simple migration.
-- **Not in v1:** mood intensity, multiple moods per check-in, users/auth (Phase 3).
+- Request and response bodies are JSON. Send `Content-Type: application/json` with every request that has a body.
+- **Lists are wrapped** in an object (`{ "moods": [...] }`); **single items are returned directly**.
+- Timestamps are ISO 8601 strings in UTC, e.g. `"2026-10-26T14:16:10.427Z"`.
+- Names of moods and symptoms are stored **trimmed and lowercase**.
+- Every error has the same shape:
+
+  ```json
+  { "error": "feelingScore must be an integer between 1-5" }
+  ```
+
+| Status | Meaning |
+|---|---|
+| `200` | OK |
+| `201` | Created; the body is the new item |
+| `204` | Deleted; no body |
+| `400` | Invalid input, including malformed JSON |
+| `404` | No item with that id, or unknown route |
+| `409` | A mood or symptom with that name already exists |
+| `500` | Unexpected server error (details are only logged on the server) |
+
+### Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | Health check |
+| `GET` | `/moods` | List all moods |
+| `POST` | `/moods` | Add a mood |
+| `GET` | `/symptoms` | List all symptoms |
+| `POST` | `/symptoms` | Add a symptom |
+| `GET` | `/mood-entries` | List all mood check-ins |
+| `GET` | `/mood-entries/:id` | Get one check-in |
+| `POST` | `/mood-entries` | Log a check-in |
+| `PATCH` | `/mood-entries/:id` | Change a check-in |
+| `DELETE` | `/mood-entries/:id` | Delete a check-in |
+| `GET` | `/symptom-entries` | List all symptom entries |
+| `GET` | `/symptom-entries/:id` | Get one symptom entry |
+| `POST` | `/symptom-entries` | Log a symptom |
+| `PATCH` | `/symptom-entries/:id` | Change a symptom entry |
+| `DELETE` | `/symptom-entries/:id` | Delete a symptom entry |
+
+### Health
+
+#### `GET /health`
+
+```json
+{ "status": "ok" }
+```
+
+### Moods and symptoms
+
+`/moods` and `/symptoms` work the same way.
+
+#### `GET /moods`
+
+```json
+{
+  "moods": [
+    { "id": 1, "name": "calm" },
+    { "id": 2, "name": "grateful" }
+  ]
+}
+```
+
+`GET /symptoms` returns `{ "symptoms": [...] }`.
+
+#### `POST /moods`
+
+```json
+{ "name": "Anxious" }
+```
+
+| Field | Rules |
+|---|---|
+| `name` | Required, non-empty string. Trimmed and lowercased before saving. |
+
+**201** with the new item:
+
+```json
+{ "id": 3, "name": "anxious" }
+```
+
+**400** if `name` is missing, empty or not a string. **409** if the name already exists (`" CALM "` counts as a duplicate of `"calm"`).
+
+### Mood entries
+
+A mood entry is one check-in. Every response includes `moodName`, so clients don't need a separate lookup.
+
+```json
+{
+  "id": 7,
+  "moodId": 1,
+  "moodName": "calm",
+  "createdAt": "2026-10-26T14:16:10.427Z",
+  "feelingScore": 4,
+  "trigger": "walk outside"
+}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | integer | Set by the database |
+| `moodId` | integer | Required; must be the `id` of an existing mood |
+| `moodName` | string | Read-only, joined from the mood |
+| `createdAt` | string | Read-only, set by the database |
+| `feelingScore` | integer or `null` | Optional, 1–5, **5 = feels good** |
+| `trigger` | string or `null` | Optional; trimmed, an empty string is stored as `null` |
+
+#### `GET /mood-entries`
+
+```json
+{ "moodEntries": [ { "id": 1, "moodId": 2, "moodName": "grateful", ... } ] }
+```
+
+Sorted by `id`, oldest first.
+
+#### `GET /mood-entries/:id`
+
+**200** with the entry, **404** if it doesn't exist.
+
+#### `POST /mood-entries`
+
+```json
+{ "moodId": 1, "feelingScore": 4, "trigger": "walk outside" }
+```
+
+Only `moodId` is required; `feelingScore` and `trigger` can be left out or sent as `null`.
+
+**201** with the full entry, including `id`, `moodName` and `createdAt`. **400** if `moodId` is missing, not an integer (`"1"` is rejected) or not an existing mood; if `feelingScore` isn't an integer from 1 to 5; or if `trigger` isn't a string.
+
+#### `PATCH /mood-entries/:id`
+
+Send only the fields you want to change:
+
+```json
+{ "feelingScore": 5 }
+```
+
+- Fields you leave out stay as they are; `{}` changes nothing.
+- `null` removes an optional value: `{ "trigger": null }` clears the trigger.
+- `moodId` can be changed but not removed: `{ "moodId": null }` is rejected.
+- `id` and `createdAt` can't be changed.
+- The update is all-or-nothing: if any field is invalid, nothing is changed.
+
+**200** with the updated entry, **400** for invalid fields (same rules as `POST`), **404** if the entry doesn't exist.
+
+#### `DELETE /mood-entries/:id`
+
+**204** with no body, **404** if the entry doesn't exist.
+
+### Symptom entries
+
+`/symptom-entries` works exactly like `/mood-entries`, with these field names:
+
+| Mood entries | Symptom entries | Notes |
+|---|---|---|
+| `moodId` | `symptomId` | Must be the `id` of an existing symptom |
+| `moodName` | `symptomName` | |
+| `feelingScore` | `intensity` | 1–5, **5 = most severe** |
+
+The list endpoint returns `{ "symptomEntries": [...] }`.
+
+### Examples with curl
+
+```sh
+# add a mood, then log a check-in with it
+curl -X POST localhost:3000/moods \
+  -H "Content-Type: application/json" \
+  -d '{"name": "calm"}'
+
+curl -X POST localhost:3000/mood-entries \
+  -H "Content-Type: application/json" \
+  -d '{"moodId": 1, "feelingScore": 4, "trigger": "walk outside"}'
+
+# change the score, then delete the check-in
+curl -X PATCH localhost:3000/mood-entries/1 \
+  -H "Content-Type: application/json" \
+  -d '{"feelingScore": 5}'
+
+curl -X DELETE localhost:3000/mood-entries/1
+```
+
+## Data model
+
+Two lookup tables (the options to pick from) and two entry tables (what gets logged). Each entry points to one option through a foreign key. The full definitions are in [`src/db/schema.sql`](src/db/schema.sql).
+
+```
+Mood ──< MoodEntry          Symptom ──< SymptomEntry
+```
+
+| Table | Columns |
+|---|---|
+| `Mood` | `id` (primary key), `name` (unique, case-insensitive) |
+| `MoodEntry` | `id`, `moodId` → `Mood.id`, `createdAt`, `feelingScore` (1–5 or NULL), `trigger` |
+| `Symptom` | `id` (primary key), `name` (unique, case-insensitive) |
+| `SymptomEntry` | `id`, `symptomId` → `Symptom.id`, `createdAt`, `intensity` (1–5 or NULL), `trigger` |
+
+All tables are `STRICT` (column types are enforced), ids use `AUTOINCREMENT` (never reused), and foreign keys are enforced with `PRAGMA foreign_keys = ON`.
+
+## Design decisions
+
+- **Lookup tables instead of free text or enums**, so moods and symptoms can be added at runtime, typos can't create near-duplicates, and renaming happens in one place.
+- **Moods and symptoms are separate logs** on their own timelines, not mixed into one entry.
+- **One mood per check-in**, kept simple on purpose; several check-ins a day are expected.
+- **The scales point in opposite directions:** `feelingScore` 5 = good, `intensity` 5 = bad. The frontend colours them accordingly.
+- **Rules are enforced twice:** the API validates types and ranges and returns clear `400` messages; the database repeats the important rules (`NOT NULL`, `UNIQUE`, `CHECK`, foreign keys) as a safety net.
+- **`trigger` instead of a general note**, because it's more useful for later questions like "which triggers come up most?". A `note` column can be added later.
+- **Raw SQL instead of an ORM**, to keep every query visible.
+- **The frontend only talks to the API**, never to the database, so all validation happens in one place.
+
+## Roadmap
+
+- [x] REST API for moods, symptoms and their entries
+- [x] SQLite database with constraints
+- [x] Frontend for both logs
+- [ ] Automated API tests (`node:test`)
+- [ ] User authentication
+- [ ] Editing entries in the frontend
+- [ ] Statistics and charts over time

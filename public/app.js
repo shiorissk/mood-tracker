@@ -17,6 +17,7 @@ const TRACKERS = {
         entriesPath: "/mood-entries",
         entriesKey: "moodEntries",
         idField: "moodId",
+        nameField: "moodName",
         scoreField: "feelingScore",
         scoreLegend: "Feeling score",
         scoreHint: "(1 = bad, 5 = good, optional)",
@@ -42,6 +43,7 @@ const TRACKERS = {
         entriesPath: "/symptom-entries",
         entriesKey: "symptomEntries",
         idField: "symptomId",
+        nameField: "symptomName",
         scoreField: "intensity",
         scoreLegend: "Intensity",
         scoreHint: "(1 = mild, 5 = severe, optional)",
@@ -129,14 +131,10 @@ function createTracker(kind, config) {
     els.triggerInput.id = `${kind}-trigger`;
     els.triggerLabel.htmlFor = els.triggerInput.id;
 
-    // Lookup id → display name; entries only contain the id
-    let names = new Map();
-
     // -- Lookup list (moods / symptoms) --
 
     async function loadLookup(selectedId) {
         const items = (await request(config.lookupPath))[config.lookupKey];
-        names = new Map(items.map(item => [item.id, displayName(item.name)]));
 
         const placeholderText = items.length
             ? `Choose a ${config.lookupLabel.toLowerCase()}`
@@ -204,9 +202,8 @@ function createTracker(kind, config) {
     }
 
     function renderEntry(entry) {
-        const lookupId = entry[config.idField];
         const score = entry[config.scoreField];
-        const name = names.get(lookupId) ?? `${config.lookupLabel} #${lookupId}`;
+        const name = displayName(entry[config.nameField]);   // the API JOINs the name in
 
         const heading = el("div", { className: "flex items-center gap-2 font-medium" }, name);
         if (score !== null) {
@@ -296,12 +293,13 @@ function createTracker(kind, config) {
     });
 
     async function load() {
-        try {
-            await loadLookup();   // first, so the entry list can show names
-        } catch (error) {
-            showError(els.formError, `Could not load ${config.lookupKey}: ${error.message}`);
-        }
-        await loadEntries();
+        // Independent of each other: entries carry their own names now
+        await Promise.all([
+            loadLookup().catch(error => {
+                showError(els.formError, `Could not load ${config.lookupKey}: ${error.message}`);
+            }),
+            loadEntries(),
+        ]);
     }
 
     return { panel, load };
