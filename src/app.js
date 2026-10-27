@@ -1,4 +1,3 @@
-import "dotenv/config";
 import "./db/db.js";
 import path from "node:path";
 import express from "express";
@@ -8,8 +7,6 @@ import moodEntriesRouter from './routes/moodEntries.js';
 import symptomEntriesRouter from './routes/symptomEntries.js';
 
 const app = express(); // create app object
-
-const PORT = process.env.PORT || 3000;
 
 // -- Middleware to accept JSON bodies
 app.use(express.json());
@@ -45,8 +42,4 @@ app.use((err, request, response, next) => {
     })
 });
 
-// Start listening
-app.listen(PORT, () => {
-    console.log("Server is running");
-    console.log(`http://localhost:${PORT}/health`);
-});
+export default app;
