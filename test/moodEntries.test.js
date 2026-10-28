@@ -1,37 +1,17 @@
-import { describe, it, before, after } from "node:test";
+import { describe, it, before } from "node:test";
 import assert from "node:assert/strict";
-import app from "../src/app.js";
+import { useServer, get, post, patch, del } from "./helpers.js";
 
-let server;
-let baseUrl;
 let moodId;
 
-before(async () => {
-    server = app.listen(0);                 // 0 = any free port
-    baseUrl = `http://localhost:${server.address().port}`;
+useServer();
 
+before(async () => {
     // create mood (test files run in its own process with its own empty in-memory database)
     const response = await post("/moods", { name: "calm" });
     moodId = (await response.json()).id;
 });
 
-after(() => server.close());
-
-function post(path, body) {
-    return fetch(`${baseUrl}${path}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-    });
-}
-
-function patch(path, body) {
-    return fetch(`${baseUrl}${path}`, { 
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-    })
-}
 
 describe("POST /mood-entries", () => {
     it("creates a mood entry and returns 201", async () => {
@@ -95,7 +75,7 @@ describe("GET /mood-entries", () => {
         const response = await post("/mood-entries", { moodId });
         const entry = await response.json();
 
-        const getResponse = await fetch(`${baseUrl}/mood-entries/${entry.id}`);
+        const getResponse = await get(`/mood-entries/${entry.id}`);
 
         assert.equal(getResponse.status, 200); // check if entry exists with the id
         const getEntry = await getResponse.json();
@@ -104,7 +84,7 @@ describe("GET /mood-entries", () => {
     });
 
     it("returns 404 for an unknown entry", async () => {
-        const getResponse = await fetch(`${baseUrl}/mood-entries/999`);
+        const getResponse = await get(`/mood-entries/999`);
         assert.equal(getResponse.status, 404);
         
     });
@@ -168,7 +148,7 @@ describe("PATCH /mood-entries", () => {
         const patchResponse = await patch(`/mood-entries/${entry.id}`, { moodId: 999, feelingScore: 4 });
         assert.equal(patchResponse.status, 400);
 
-        const getResponse = await fetch(`${baseUrl}/mood-entries/${entry.id}`);
+        const getResponse = await get(`/mood-entries/${entry.id}`);
         const afterPatch = await getResponse.json();
         assert.deepEqual(entry, afterPatch);
     });
@@ -185,17 +165,13 @@ describe("DELETE /mood-entries", () => {
         const response = await post("/mood-entries", { moodId, feelingScore: 2, trigger: "work" });
         const entry = await response.json();
 
-        const deleteResponse = await fetch(`${baseUrl}/mood-entries/${entry.id}`, {
-            method: "DELETE"
-        });
+        const deleteResponse = await del(`/mood-entries/${entry.id}`);
         assert.equal(deleteResponse.status, 204);
 
-        const getResponse = await fetch(`${baseUrl}/mood-entries/${entry.id}`);
+        const getResponse = await get(`/mood-entries/${entry.id}`);
         assert.equal(getResponse.status, 404);
 
-        const anotherDelete = await fetch(`${baseUrl}/mood-entries/${entry.id}`, {
-            method: "DELETE"
-        });
+        const anotherDelete = await del(`/mood-entries/${entry.id}`);
         assert.equal(anotherDelete.status, 404);
     });
 });

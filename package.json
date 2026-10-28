@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "test": "DB_PATH=:memory: node --test",
+    "test": "DB_PATH=:memory: node --test \"test/**/*.test.js\"",
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "prestart": "npm run build:css",

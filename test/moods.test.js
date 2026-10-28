@@ -1,24 +1,8 @@
-import { describe, it, before, after } from "node:test";
+import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import app from "../src/app.js";
+import { useServer, post, get } from "./helpers.js";
 
-let server;
-let baseUrl;
-
-before(() => {
-    server = app.listen(0);                 // 0 = any free port
-    baseUrl = `http://localhost:${server.address().port}`;
-});
-
-after(() => server.close());
-
-function post(path, body) {
-    return fetch(`${baseUrl}${path}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-    });
-}
+useServer();
 
 describe("POST /moods", () => {
     it("creates a mood and returns 201", async () => {
@@ -35,7 +19,7 @@ describe("POST /moods", () => {
         assert.equal(response.status, 409);
         
         // check that "calm" is in moods only once
-        const getResponse = await fetch(`${baseUrl}/moods`);
+        const getResponse = await get("/moods");
         const { moods } = await getResponse.json();
         const calmMoods = moods.filter(mood => mood.name === "calm");
         assert.equal(calmMoods.length, 1);
