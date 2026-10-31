@@ -5,7 +5,7 @@ const router = express.Router();
 
 // -- GET /symptoms -------------------------------------------
 router.get("/", (request, response) => {
-    const symptoms = db.prepare("SELECT * FROM Symptom ORDER BY id").all();
+    const symptoms = db.prepare("SELECT * FROM Symptom WHERE userId = ? ORDER BY id").all(request.user.id);
     response.json({
         symptoms: symptoms
     });
@@ -25,7 +25,7 @@ router.post("/", (request, response) => {
 
     const name = body.name.trim().toLowerCase();
     // get corresponding symptom from db 
-    const symptom = db.prepare("SELECT * FROM Symptom WHERE name = ?").get(name);
+    const symptom = db.prepare("SELECT * FROM Symptom WHERE name = ? AND userId = ?").get(name, request.user.id);
 
     // If it's already in the list, return 409. 
     if (symptom) {
@@ -35,7 +35,7 @@ router.post("/", (request, response) => {
     }
 
     // Otherwise insert new symptom and return 201 with the new symptom
-    const newSymptom = db.prepare("INSERT INTO Symptom (name) VALUES (?) RETURNING *").get(name);
+    const newSymptom = db.prepare("INSERT INTO Symptom (name, userId) VALUES (?, ?) RETURNING *").get(name, request.user.id);
 
     response.status(201).json(newSymptom);
 });

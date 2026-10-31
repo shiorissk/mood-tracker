@@ -5,7 +5,7 @@ const router = express.Router();
 
 // -- GET /moods
 router.get("/", (request, response) => {
-    const moods = db.prepare("SELECT * FROM Mood ORDER BY id").all();
+    const moods = db.prepare("SELECT * FROM Mood WHERE userId = ? ORDER BY id").all(request.user.id);
     response.json({
         moods: moods
     });
@@ -23,7 +23,7 @@ router.post("/", (request, response) => {
     }
     
     const name = body.name.trim().toLowerCase();
-    const row = db.prepare("SELECT * FROM Mood WHERE name = ?").get(name); // check if the row exists
+    const row = db.prepare("SELECT * FROM Mood WHERE name = ? AND userId = ?").get(name, request.user.id); // check if the row exists
 
     // If it's already in the list, return 409. 
     if (row) {
@@ -32,8 +32,8 @@ router.post("/", (request, response) => {
         });
     }
 
-    db.prepare("INSERT INTO Mood (name) VALUES (?)").run(name);
-    const newMood = db.prepare("SELECT * FROM Mood WHERE name = ?").get(name);
+    db.prepare("INSERT INTO Mood (name, userId) VALUES (?, ?)").run(name, request.user.id);
+    const newMood = db.prepare("SELECT * FROM Mood WHERE name = ? AND userId = ?").get(name, request.user.id);
 
     response.status(201).json(newMood);
 });

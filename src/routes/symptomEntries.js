@@ -4,7 +4,7 @@ import db from "../db/db.js";
 const router = express.Router();
 
 const SELECT_ENTRY = `
-    SELECT e.id, e.symptomId, s.name as symptomName, e.createdAt, e.intensity, trigger
+    SELECT e.id, e.symptomId, s.name as symptomName, e.createdAt, e.intensity, e.trigger
     FROM SymptomEntry AS e
     LEFT JOIN Symptom AS s
     ON e.symptomId = s.id
@@ -14,8 +14,9 @@ const SELECT_ENTRY = `
 router.get('/', (request, response) => {
     const symptomEntries = db.prepare(`
         ${SELECT_ENTRY}
+        WHERE e.userId = ?
         ORDER BY e.id
-    `).all();
+    `).all(request.user.id);
     response.json({
         symptomEntries: symptomEntries
     });
@@ -24,7 +25,7 @@ router.get('/', (request, response) => {
 // -- GET /symptom-entries/:id
 router.get("/:id", (request, response) => {
     const entryId = Number(request.params.id);
-    const symptomEntry = db.prepare(`${SELECT_ENTRY} WHERE e.id = ?`).get(entryId);
+    const symptomEntry = db.prepare(`${SELECT_ENTRY} WHERE e.id = ? AND e.userId = ?`).get(entryId, request.user.id);
 
     // return 404, if symptom with the id is not found
     if (!symptomEntry) {
@@ -40,8 +41,8 @@ router.get("/:id", (request, response) => {
 router.post("/", (request, response) => {
     const body = request.body ?? {};
 
-    // Return if symptomId does not exist in symptoms array
-    if (!Number.isInteger(body.symptomId) || !db.prepare("SELECT * FROM Symptom WHERE id = ?").get(body.symptomId)) {
+    // Return if symptomId does not exist
+    if (!Number.isInteger(body.symptomId) || !db.prepare("SELECT * FROM Symptom WHERE id = ? AND userId = ?").get(body.symptomId, request.user.id)) {
         return response.status(400).json({
             error: 'symptomId must be the id of an existing symptom'
         })
@@ -63,19 +64,20 @@ router.post("/", (request, response) => {
 
      // Otherwise insert new entry to symptomEntry
     const newSymptomEntry = db.prepare(`
-        INSERT INTO SymptomEntry (symptomId, intensity, trigger)
-        VALUES (?, ?, ?)
+        INSERT INTO SymptomEntry (symptomId, intensity, trigger, userId)
+        VALUES (?, ?, ?, ?)
         RETURNING *
     `).get(
         body.symptomId,
         body.intensity ?? null,
-        body.trigger?.trim() || null
+        body.trigger?.trim() || null,
+        request.user.id
     );
 
     const newEntryWithSymptomName = db.prepare(`
         ${SELECT_ENTRY}
-        WHERE e.id = ?
-    `).get(newSymptomEntry.id);
+        WHERE e.id = ? AND e.userId = ?
+    `).get(newSymptomEntry.id, request.user.id);
 
     response.status(201).json(newEntryWithSymptomName);
 });
@@ -83,7 +85,7 @@ router.post("/", (request, response) => {
 // -- DELETE /symptom-entries/:id
 router.delete("/:id", (request, response) => {
     const entryId = Number(request.params.id);
-    const entry = db.prepare("SELECT * FROM SymptomEntry WHERE id = ?").get(entryId);
+    const entry = db.prepare("SELECT * FROM SymptomEntry WHERE id = ? AND userId = ?").get(entryId, request.user.id);
 
     if (!entry) {
         return response.status(404).json({
@@ -91,14 +93,14 @@ router.delete("/:id", (request, response) => {
         })
     }
 
-    db.prepare("DELETE FROM SymptomEntry WHERE id = ?").run(entryId);
+    db.prepare("DELETE FROM SymptomEntry WHERE id = ? AND userId = ?").run(entryId, request.user.id);
     response.status(204).end();
 });
 
 // -- PATCH /symptom-entries/:id
 router.patch("/:id", (request, response) => {
     const entryId = Number(request.params.id);
-    const entry = db.prepare("SELECT * FROM SymptomEntry WHERE id = ?").get(entryId);
+    const entry = db.prepare("SELECT * FROM SymptomEntry WHERE id = ? AND userId = ?").get(entryId, request.user.id);
     const body = request.body ?? {};
 
     if (!entry) {
@@ -108,7 +110,7 @@ router.patch("/:id", (request, response) => {
     }
 
     // Return if symptomId does not exist in symptoms array
-    if (body.symptomId !== undefined && (!Number.isInteger(body.symptomId) || !db.prepare("SELECT * FROM Symptom WHERE id = ?").get(body.symptomId))) {
+    if (body.symptomId !== undefined && (!Number.isInteger(body.symptomId) || !db.prepare("SELECT * FROM Symptom WHERE id = ? AND userId = ?").get(body.symptomId, request.user.id))) {
         return response.status(400).json({
             error: 'symptomId must be the id of an existing symptom'
         })
@@ -128,17 +130,18 @@ router.patch("/:id", (request, response) => {
         })
     }
 
-    const updatedEntry = db.prepare("UPDATE SymptomEntry SET symptomId = ?, intensity = ?, trigger = ? WHERE id = ? RETURNING *").get(
+    const updatedEntry = db.prepare("UPDATE SymptomEntry SET symptomId = ?, intensity = ?, trigger = ? WHERE id = ? AND userId = ? RETURNING *").get(
         body.symptomId !== undefined ? body.symptomId : entry.symptomId,
         body.intensity !== undefined ? body.intensity : entry.intensity,
         body.trigger !== undefined ? body.trigger?.trim() || null : entry.trigger,
-        entryId
+        entryId,
+        request.user.id
     );
 
     const updatedEntryWithSymptomName = db.prepare(`
         ${SELECT_ENTRY}
-        WHERE e.id = ?
-    `).get(updatedEntry.id);
+        WHERE e.id = ? AND e.userId = ?
+    `).get(updatedEntry.id, request.user.id);
 
 
     return response.json(updatedEntryWithSymptomName)

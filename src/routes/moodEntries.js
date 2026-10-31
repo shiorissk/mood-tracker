@@ -13,8 +13,9 @@ const SELECT_ENTRY = `
 router.get('/', (request, response) => {
     const moodEntries = db.prepare(`
         ${SELECT_ENTRY}
+        WHERE e.userId = ?
         ORDER BY e.id
-    `).all();
+    `).all(request.user.id);
     response.json({
         moodEntries: moodEntries
     });
@@ -24,9 +25,9 @@ router.get('/', (request, response) => {
 router.get("/:id", (request, response) => {
     const entryId = Number(request.params.id);
     const moodEntry = db.prepare(`
-         ${SELECT_ENTRY}
-        WHERE e.id = ?
-    `).get(entryId);
+        ${SELECT_ENTRY} 
+        WHERE e.id = ? AND e.userId = ?
+    `).get(entryId, request.user.id);
 
     // return 404, if mood with the id is not found
     if (!moodEntry) {
@@ -43,7 +44,7 @@ router.post("/", (request, response) => {
     const body = request.body ?? {};
 
     // Return if moodId does not exist in Mood table
-    if (!Number.isInteger(body.moodId) || !db.prepare("SELECT * FROM Mood WHERE id = ?").get(body.moodId)) {
+    if (!Number.isInteger(body.moodId) || !db.prepare("SELECT * FROM Mood WHERE id = ? AND userId = ?").get(body.moodId, request.user.id)) {
         return response.status(400).json({
             error: 'moodId must be the id of an existing mood'
         })
@@ -65,19 +66,20 @@ router.post("/", (request, response) => {
 
     // Otherwise insert new entry to moodEntry
     const newMoodEntry = db.prepare(`
-        INSERT INTO MoodEntry (moodId, feelingScore, trigger)
-        VALUES (?, ?, ?)
+        INSERT INTO MoodEntry (moodId, feelingScore, trigger, userId)
+        VALUES (?, ?, ?, ?)
         RETURNING *
     `).get(
         body.moodId,
         body.feelingScore ?? null,
-        body.trigger?.trim() || null
+        body.trigger?.trim() || null,
+        request.user.id
     );
 
     const newMoodEntryWithName = db.prepare(`
         ${SELECT_ENTRY}
-        WHERE e.id = ?
-    `).get(newMoodEntry.id);
+        WHERE e.id = ? AND e.userId = ?
+    `).get(newMoodEntry.id, request.user.id);
 
     response.status(201).json(newMoodEntryWithName);
 });
@@ -85,7 +87,7 @@ router.post("/", (request, response) => {
 // -- DELETE /mood-entries/:id
 router.delete("/:id", (request, response) => {
     const entryId = Number(request.params.id);
-    const entry = db.prepare("SELECT * FROM MoodEntry WHERE id = ?").get(entryId);
+    const entry = db.prepare("SELECT * FROM MoodEntry WHERE id = ? AND userId = ?").get(entryId, request.user.id);
 
     if (!entry) {
         return response.status(404).json({
@@ -100,7 +102,7 @@ router.delete("/:id", (request, response) => {
 // -- PATCH /mood-entries/:id
 router.patch("/:id", (request, response) => {
     const entryId = Number(request.params.id);
-    const entry = db.prepare("SELECT * FROM MoodEntry WHERE id = ?").get(entryId);
+    const entry = db.prepare("SELECT * FROM MoodEntry WHERE id = ? AND userId = ?").get(entryId, request.user.id);
     const body = request.body ?? {};
 
     if (!entry) {
@@ -110,7 +112,7 @@ router.patch("/:id", (request, response) => {
     }
 
     // Return if moodId does not exist in moods array
-    if (body.moodId !== undefined && (!Number.isInteger(body.moodId) || !db.prepare("SELECT * FROM Mood WHERE id = ?").get(body.moodId))) {
+    if (body.moodId !== undefined && (!Number.isInteger(body.moodId) || !db.prepare("SELECT * FROM Mood WHERE id = ? AND userId = ?").get(body.moodId, request.user.id))) {
         return response.status(400).json({
             error: 'moodId must be the id of an existing mood'
         })
@@ -130,17 +132,18 @@ router.patch("/:id", (request, response) => {
         })
     }
 
-    const updatedEntry = db.prepare("UPDATE MoodEntry SET moodId = ?, feelingScore = ?, trigger = ? WHERE id = ? RETURNING *").get(
+    const updatedEntry = db.prepare("UPDATE MoodEntry SET moodId = ?, feelingScore = ?, trigger = ? WHERE id = ? AND userId = ? RETURNING *").get(
         body.moodId !== undefined ? body.moodId : entry.moodId,
         body.feelingScore !== undefined ? body.feelingScore : entry.feelingScore,
         body.trigger !== undefined ? body.trigger?.trim() || null : entry.trigger,
-        entryId
+        entryId,
+        request.user.id
     );
 
     const updatedEntryWithName = db.prepare(`
         ${SELECT_ENTRY}
-        WHERE e.id = ?
-    `).get(updatedEntry.id);
+        WHERE e.id = ? AND e.userId = ?
+    `).get(updatedEntry.id, request.user.id);
 
     return response.json(updatedEntryWithName);
 });

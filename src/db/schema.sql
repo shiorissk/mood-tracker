@@ -1,6 +1,21 @@
+CREATE TABLE IF NOT EXISTS User (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    passwordHash TEXT NOT NULL,
+    createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS Session (
+    id TEXT PRIMARY KEY,
+    userId INTEGER NOT NULL REFERENCES User(id),
+    expiresAt TEXT NOT NULL
+) STRICT;
+
 CREATE TABLE IF NOT EXISTS Mood (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE COLLATE NOCASE
+    name TEXT NOT NULL COLLATE NOCASE,
+    userId INTEGER NOT NULL REFERENCES User(id),
+    UNIQUE (userId, name)
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS MoodEntry (
@@ -8,12 +23,15 @@ CREATE TABLE IF NOT EXISTS MoodEntry (
     moodId INTEGER NOT NULL REFERENCES Mood(id),
     createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     feelingScore INTEGER CHECK (feelingScore BETWEEN 1 AND 5),
-    trigger TEXT
+    trigger TEXT,
+    userId INTEGER NOT NULL REFERENCES User(id)
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS Symptom (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE COLLATE NOCASE
+    name TEXT NOT NULL COLLATE NOCASE,
+    userId INTEGER NOT NULL REFERENCES User(id),
+    UNIQUE (userId, name)
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS SymptomEntry (
@@ -21,5 +39,6 @@ CREATE TABLE IF NOT EXISTS SymptomEntry (
     symptomId INTEGER NOT NULL REFERENCES Symptom(id),
     createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     intensity INTEGER CHECK (intensity BETWEEN 1 AND 5),
-    trigger TEXT
+    trigger TEXT,
+    userId INTEGER NOT NULL REFERENCES User(id)
 ) STRICT;
