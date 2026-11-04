@@ -1,13 +1,10 @@
-import { describe, it, before } from "node:test";
+import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { useServer, get, post, patch, del } from "./helpers.js";
 
 let moodId;
 
-useServer();
-
-before(async () => {
-    // create mood (test files run in its own process with its own empty in-memory database)
+useServer(async () => {
     const response = await post("/moods", { name: "calm" });
     moodId = (await response.json()).id;
 });

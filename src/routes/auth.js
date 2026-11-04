@@ -1,6 +1,7 @@
 import express from "express";
 import db from "../db/db.js";
 import crypto from "node:crypto";
+import requireAuth from "../middleware/requireAuth.js";
 
 const router = express.Router();
 
@@ -43,7 +44,7 @@ router.post("/register", (request, response) => {
     const user = db.prepare("SELECT id, email FROM User WHERE email = ?").get(email);
 
     // Respond 201 with { id, email }.
-    response.status(201).json({ id: user.id, email: user.email  });
+    return response.status(201).json({ id: user.id, email: user.email  });
 });
 
 
@@ -97,6 +98,30 @@ router.post("/login", (request, response) => {
         id: user.id,
         email: user.email
     });
+});
+
+// -- POST /auth/logout -------------------------------------------
+router.post("/logout", (request, response) => {
+    const sessionId = request.cookies.sessionId;
+
+    if (sessionId) {
+        // delete session from Session table
+        db.prepare("DELETE FROM Session WHERE id = ?").run(sessionId);
+
+        // clear browser cookie
+        response.clearCookie("sessionId");
+    }
+
+    // respond 204
+    return response.status(204).end();
+});
+
+// -- GET /auth/me -------------------------------------------
+router.get("/me", requireAuth, (request, response) => {
+    const user = db.prepare("SELECT id, email FROM User WHERE id = ?").get(request.user.id);
+
+
+    return response.json(user);
 });
 
 export default router;

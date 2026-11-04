@@ -4,9 +4,7 @@ import { useServer, get, post, patch, del } from "./helpers.js";
 
 let symptomId;
 
-useServer();
-
-before(async () => {
+useServer(async () => {
     // create symptom (test files run in its own process with its own empty in-memory database)
     const response = await post("/symptoms", { name: "headache" });
     symptomId = (await response.json()).id;
