@@ -1,15 +1,6 @@
-/**
- * 
- * Register: 201 { id, email } with no passwordHash in the response; the same email again in different case → 409; an invalid email or a short password → 400
-Login: wrong password → 401; unknown email → 401 with the same message
-Protection: a request without a cookie → 401, e.g. fetch without your helpers
-me / logout: /auth/me → 200; then logout → 204; then /auth/me with the old cookie → 401
-Isolation: user B can't see, change or delete user A's entry → 404
- */
-
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { useServer, get, post, patch, del } from "./helpers.js";
+import { useServer, get, post, patch, del, getWithoutCookie, loginAs } from "./helpers.js";
 
 useServer();
 
@@ -69,5 +60,46 @@ describe("POST /auth/login", () => {
         assert.equal(unknownEmailResponse.status, 401);
         // check if error messages are same for unknown email and wrong password
         assert.equal(unknownEmailResponseJSON.error, wrongPasswordResponseJSON.error);
+    });
+});
+
+describe("protected routes", () => {
+    it("rejects /moods without a cookie", async () => {
+        const response = await getWithoutCookie("/moods");
+        assert.equal(response.status, 401);
+    });
+
+    it("rejects /symptoms without a cookie", async () => {
+        const response = await getWithoutCookie("/symptoms");
+        assert.equal(response.status, 401);
+    });
+
+    it("rejects /symptom-entries without a cookie", async () => {
+        const response = await getWithoutCookie("/symptom-entries");
+        assert.equal(response.status, 401);
+    });
+
+    it("rejects /mood-entries without a cookie", async () => {
+        const response = await getWithoutCookie("/mood-entries");
+        assert.equal(response.status, 401);
+    });
+});
+
+describe("POST /auth/logout", () => {
+    it("returns the logged-in user", async () => {
+        const response = await get("/auth/me");
+        const user = await response.json();
+
+        assert.equal(response.status, 200);
+        assert.equal(user.email, 'a@example.com');
+        assert.equal(user.passwordHash, undefined); // make sure password has is not sent back
+    });
+
+    it("log out user", async () => {
+        const response = await post("/auth/logout");
+
+        assert.equal(response.status, 204);
+        const meResponse = await get("/auth/me");
+        assert.equal(meResponse.status, 401);   // the session is gone
     });
 });

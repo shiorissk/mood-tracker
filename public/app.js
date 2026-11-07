@@ -1,4 +1,4 @@
-import { request } from "./api.js";
+import { request, setUnauthorizedHandler } from "./api.js";
 
 /**
  * Everything that differs between the mood and the symptom tracker.
@@ -86,6 +86,12 @@ function clearError(container) {
 /** Names are stored lowercase by the API; capitalize only for display */
 function displayName(name) {
     return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+function loadingOption() {
+    const option = new Option("Loading…", "", true, true);
+    option.disabled = true;
+    return option;
 }
 
 // -- Tracker (one per tab) --------------------------------------------------
@@ -292,7 +298,19 @@ function createTracker(kind, config) {
         if (event.key === "Escape") closeNew();
     });
 
+    /** Back to the empty "Loading…" state, so nothing of the previous user stays on the page */
+    function clear() {
+        els.form.reset();
+        closeNew();
+        clearError(els.formError);
+        clearError(els.listError);
+        els.lookupSelect.replaceChildren(loadingOption());
+        els.list.replaceChildren(el("li", { className: "px-5 py-4 text-sm text-slate-500", text: "Loading…" }));
+        els.count.textContent = "";
+    }
+
     async function load() {
+        clear();
         // Independent of each other: entries carry their own names now
         await Promise.all([
             loadLookup().catch(error => {
@@ -302,7 +320,7 @@ function createTracker(kind, config) {
         ]);
     }
 
-    return { panel, load };
+    return { panel, load, clear };
 }
 
 // -- Tabs -------------------------------------------------------------------
@@ -331,6 +349,133 @@ function kindFromHash() {
     return Object.keys(TRACKERS).find(kind => TRACKERS[kind].hash === location.hash) ?? "mood";
 }
 
+// -- Auth -------------------------------------------------------------------
+
+const AUTH_MODES = {
+    login: {
+        title: "Log in",
+        subtitle: "Welcome back.",
+        submitLabel: "Log in",
+        switchText: "No account yet?",
+        switchLabel: "Create one",
+        passwordAutocomplete: "current-password",
+    },
+    register: {
+        title: "Create an account",
+        subtitle: "Your moods and symptoms are only visible to you.",
+        submitLabel: "Create account",
+        switchText: "Already have an account?",
+        switchLabel: "Log in",
+        passwordAutocomplete: "new-password",   // lets password managers suggest a new one
+    },
+};
+
+const authEls = {
+    section: document.querySelector(".js-auth"),
+    title: document.querySelector(".js-auth-title"),
+    subtitle: document.querySelector(".js-auth-subtitle"),
+    form: document.querySelector(".js-auth-form"),
+    email: document.querySelector(".js-auth-email"),
+    password: document.querySelector(".js-auth-password"),
+    passwordHint: document.querySelector(".js-password-hint"),
+    error: document.querySelector(".js-auth-error"),
+    submit: document.querySelector(".js-auth-submit"),
+    switchText: document.querySelector(".js-auth-switch-text"),
+    switchButton: document.querySelector(".js-auth-switch"),
+};
+
+const appEl = document.querySelector(".js-app");
+const userBar = document.querySelector(".js-user-bar");
+const userEmail = document.querySelector(".js-user-email");
+const logoutButton = document.querySelector(".js-logout");
+
+let authMode = "login";
+
+function setAuthMode(mode) {
+    authMode = mode;
+    const config = AUTH_MODES[mode];
+    authEls.title.textContent = config.title;
+    authEls.subtitle.textContent = config.subtitle;
+    authEls.submit.textContent = config.submitLabel;
+    authEls.switchText.textContent = config.switchText;
+    authEls.switchButton.textContent = config.switchLabel;
+    authEls.password.autocomplete = config.passwordAutocomplete;
+    // Same rule as the API; only registering checks it (an old password could be shorter)
+    if (mode === "register") {
+        authEls.password.minLength = 8;
+    } else {
+        authEls.password.removeAttribute("minlength");
+    }
+    authEls.passwordHint.hidden = mode !== "register";
+    clearError(authEls.error);
+}
+
+async function submitAuth(event) {
+    event.preventDefault();
+    clearError(authEls.error);
+
+    const data = new FormData(authEls.form);
+    const body = { email: data.get("email"), password: data.get("password") };
+
+    authEls.submit.disabled = true;
+    try {
+        // Registering doesn't create a session, so log in right after
+        if (authMode === "register") {
+            await request("/auth/register", { method: "POST", body });
+        }
+        const user = await request("/auth/login", { method: "POST", body });
+        authEls.form.reset();
+        await showApp(user);
+    } catch (error) {
+        showError(authEls.error, error.message);
+    } finally {
+        authEls.submit.disabled = false;
+    }
+}
+
+async function logout() {
+    logoutButton.disabled = true;
+    try {
+        await request("/auth/logout", { method: "POST" });
+    } catch {
+        // The API answers 204 even without a session; on a network error we still show the form
+    } finally {
+        logoutButton.disabled = false;
+        showAuth();
+    }
+}
+
+/** GET /auth/me: the logged-in user, or null (401 = not logged in) */
+async function currentUser() {
+    try {
+        return await request("/auth/me");
+    } catch {
+        return null;
+    }
+}
+
+async function showApp(user) {
+    authEls.section.hidden = true;
+    userEmail.textContent = user.email;
+    userBar.hidden = false;
+    appEl.hidden = false;
+    await Promise.all(Object.values(trackers).map(tracker => tracker.load()));
+}
+
+function showAuth() {
+    appEl.hidden = true;
+    userBar.hidden = true;
+    userEmail.textContent = "";
+    for (const tracker of Object.values(trackers)) tracker.clear();
+    setAuthMode("login");
+    authEls.section.hidden = false;
+    authEls.email.focus();
+}
+
+authEls.form.addEventListener("submit", submitAuth);
+authEls.switchButton.addEventListener("click", () => setAuthMode(authMode === "login" ? "register" : "login"));
+logoutButton.addEventListener("click", logout);
+
 // -- Start ------------------------------------------------------------------
 
 document.querySelector(".js-panels").append(...Object.values(trackers).map(tracker => tracker.panel));
@@ -338,4 +483,12 @@ document.querySelector(".js-panels").append(...Object.values(trackers).map(track
 showTab(kindFromHash());
 window.addEventListener("hashchange", () => showTab(kindFromHash()));
 
-await Promise.all(Object.values(trackers).map(tracker => tracker.load()));
+setAuthMode("login");
+setUnauthorizedHandler(showAuth);   // e.g. the session expired while the page was open
+
+const user = await currentUser();
+if (user) {
+    await showApp(user);
+} else {
+    showAuth();
+}

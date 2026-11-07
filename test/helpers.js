@@ -6,6 +6,12 @@ let server;
 let baseUrl;
 let cookie;
 
+export async function loginAs(email) {
+    await post("/auth/register", { email, password: "secret123" });
+    const loginResponse = await post("/auth/login", { email, password: "secret123" });
+    return loginResponse.headers.getSetCookie()[0].split(";")[0];
+}
+
 /** Call once at the top of a test file: starts the app before the tests, stops it after */
 export function useServer(setup) {
     before(async() => {
@@ -13,53 +19,55 @@ export function useServer(setup) {
         baseUrl = `http://localhost:${server.address().port}`;
         
         // register a test user and get loginResponse
-        await post("/auth/register", { email: "a@example.com", password: "secret123" });
-        const loginResponse = await post("/auth/login", { email: "a@example.com", password: "secret123" });
-        cookie = loginResponse.headers.getSetCookie()[0].split(";")[0];
+        cookie = await loginAs("a@example.com");
         
         if(setup) await setup();
     });
     after(() => server.close());
 }
 
-export function get(path) { 
+export function get(path, asCookie = cookie) { 
     return fetch(`${baseUrl}${path}`, {
         method: "GET",
         headers: { 
             "Content-Type": "application/json",
-            "Cookie": cookie
+            "Cookie": asCookie
         },
     });
 }
 
-export function post(path, body) {
+export function post(path, body, asCookie = cookie) {
     return fetch(`${baseUrl}${path}`, {
         method: "POST",
         headers: { 
             "Content-Type": "application/json",
-            "Cookie": cookie
+            "Cookie": asCookie
         },
         body: JSON.stringify(body),
     });
 }
 
-export function patch(path, body) { 
+export function getWithoutCookie(path) {
+    return fetch(`${baseUrl}${path}`);
+}
+
+export function patch(path, body, asCookie = cookie) { 
     return fetch(`${baseUrl}${path}`, { 
         method: "PATCH",
          headers: { 
             "Content-Type": "application/json",
-            "Cookie": cookie
+            "Cookie": asCookie
         },
         body: JSON.stringify(body),
     })
 }
 
-export function del(path) { 
+export function del(path, asCookie = cookie) { 
     return fetch(`${baseUrl}${path}`, {
         method: "DELETE",
         headers: { 
             "Content-Type": "application/json",
-            "Cookie": cookie
+            "Cookie": asCookie
         },
     });
 }

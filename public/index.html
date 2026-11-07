@@ -12,15 +12,59 @@
 
 <body class="bg-slate-50 text-slate-800 antialiased">
     <main class="mx-auto max-w-2xl px-4 py-8">
-        <h1 class="mb-6 text-2xl font-semibold tracking-tight">Mood tracker</h1>
+        <header class="mb-6 flex items-center justify-between gap-4">
+            <h1 class="text-2xl font-semibold tracking-tight">Mood tracker</h1>
 
-        <div role="tablist" aria-label="Tracker" class="mb-6 inline-flex rounded-lg bg-slate-200/70 p-1 text-sm font-medium">
-            <a href="#mood" role="tab" data-kind="mood" class="js-tab rounded-md px-4 py-1.5">Mood</a>
-            <a href="#symptoms" role="tab" data-kind="symptom" class="js-tab rounded-md px-4 py-1.5">Symptoms</a>
+            <div class="js-user-bar flex min-w-0 items-center gap-3 text-sm" hidden>
+                <span class="js-user-email truncate text-slate-500"></span>
+                <button type="button"
+                        class="js-logout shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+                    Log out
+                </button>
+            </div>
+        </header>
+
+        <!-- Login / register: shown when GET /auth/me answers 401 (see app.js) -->
+        <section class="js-auth mx-auto max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-sm" hidden>
+            <h2 class="js-auth-title mb-1 text-lg font-medium"></h2>
+            <p class="js-auth-subtitle mb-5 text-sm text-slate-500"></p>
+
+            <form class="js-auth-form space-y-4">
+                <div>
+                    <label for="auth-email" class="mb-1.5 block text-sm font-medium text-slate-700">Email</label>
+                    <input id="auth-email" name="email" type="email" required autocomplete="email"
+                           class="js-auth-email w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none">
+                </div>
+
+                <div>
+                    <label for="auth-password" class="mb-1.5 block text-sm font-medium text-slate-700">Password</label>
+                    <input id="auth-password" name="password" type="password" required
+                           class="js-auth-password w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none">
+                    <p class="js-password-hint mt-1.5 text-xs text-slate-500" hidden>At least 8 characters.</p>
+                </div>
+
+                <div class="js-auth-error rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert" hidden></div>
+
+                <button type="submit"
+                        class="js-auth-submit w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"></button>
+            </form>
+
+            <p class="mt-5 text-center text-sm text-slate-500">
+                <span class="js-auth-switch-text"></span>
+                <button type="button" class="js-auth-switch font-medium text-indigo-600 hover:text-indigo-800"></button>
+            </p>
+        </section>
+
+        <!-- The tracker itself: shown once logged in -->
+        <div class="js-app" hidden>
+            <div role="tablist" aria-label="Tracker" class="mb-6 inline-flex rounded-lg bg-slate-200/70 p-1 text-sm font-medium">
+                <a href="#mood" role="tab" data-kind="mood" class="js-tab rounded-md px-4 py-1.5">Mood</a>
+                <a href="#symptoms" role="tab" data-kind="symptom" class="js-tab rounded-md px-4 py-1.5">Symptoms</a>
+            </div>
+
+            <!-- One panel per tracker is created from the template below (see app.js) -->
+            <div class="js-panels"></div>
         </div>
-
-        <!-- One panel per tracker is created from the template below (see app.js) -->
-        <div class="js-panels"></div>
     </main>
 
     <template id="tracker-template">
